@@ -166,33 +166,60 @@ def verify(
     start_time = time.time()
 
     try:
+        print("========== VERIFY START ==========")
+        print("Filename:", file.filename)
+
         application = json.loads(applicationData)
+        print("Application:", application)
+
+        if not is_allowed_image(file):
+            return unsupported_file_response(file)
+
+        image_bytes = file.file.read()
+        image = open_uploaded_image(image_bytes)
+
+        if image is None:
+            return unsupported_file_response(file)
+
+        ocr_result = run_ocr_with_rotation(image)
+
+        print("OCR SUCCESS")
+        print("OCR Confidence:", ocr_result["confidence"])
+        print("Rotation:", ocr_result["rotation"])
+        print("PSM:", ocr_result["psm"])
+
+        extracted_text = ocr_result["text"]
+
+        print("OCR Preview:")
+        print(extracted_text[:500])
+
+        verification = verify_label(application, extracted_text)
+
+        print("VERIFY SUCCESS")
+
+        verification["processingTimeSeconds"] = round(time.time() - start_time, 2)
+        verification["filename"] = file.filename
+        verification["ocrConfidence"] = ocr_result["confidence"]
+        verification["rotationApplied"] = ocr_result["rotation"]
+        verification["psmUsed"] = ocr_result["psm"]
+
+        return verification
+
     except json.JSONDecodeError:
         return {
             "error": "Invalid applicationData JSON",
             "received": applicationData,
         }
 
-    if not is_allowed_image(file):
-        return unsupported_file_response(file)
+    except Exception as e:
+        import traceback
 
-    image_bytes = file.file.read()
-    image = open_uploaded_image(image_bytes)
+        print("========== VERIFY ERROR ==========")
+        print("Error:", str(e))
+        traceback.print_exc()
+        print("==================================")
 
-    if image is None:
-        return unsupported_file_response(file)
-
-    ocr_result = run_ocr_with_rotation(image)
-
-    extracted_text = ocr_result["text"] 
-    verification = verify_label(application, extracted_text)
-
-    verification["processingTimeSeconds"] = round(time.time() - start_time, 2)
-    verification["filename"] = file.filename
-    verification["ocrConfidence"] = ocr_result["confidence"]
-    verification["rotationApplied"] = ocr_result["rotation"]
-    verification["psmUsed"] = ocr_result["psm"]
-    return verification
+        raise
 
 
 @app.post("/analyze-label")
