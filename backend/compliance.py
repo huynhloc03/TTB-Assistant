@@ -19,21 +19,25 @@ def normalize_text(text: str) -> str:
     return re.sub(r"[^a-z0-9]", "", text.lower())
 
 
+
+
 def find_warning_text(extracted_text: str) -> str:
-    lines = [line.strip() for line in extracted_text.splitlines() if line.strip()]
-    warning_lines = []
-    found_warning_start = False
+    if not extracted_text:
+        return "Unable to Identify"
 
-    for line in lines:
-        lower = line.lower()
+    text = re.sub(r"\s+", " ", extracted_text).strip()
 
-        if "warning" in lower or "gover" in lower:
-            found_warning_start = True
+    upper_text = text.upper()
 
-        if found_warning_start:
-            warning_lines.append(line)
+    start = upper_text.find("GOVERNMENT WARNING:")
 
-    return " ".join(warning_lines)
+    if start == -1:
+        start = upper_text.find("GOVERNMENT WARNING")
+
+    if start == -1:
+        return "Unable to Identify"
+
+    return text[start:].strip()
 
 
 def run_compliance_checks(

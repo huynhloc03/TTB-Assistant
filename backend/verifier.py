@@ -55,6 +55,8 @@ def clean_ocr_line(text: str) -> str:
     return text.strip()
 
 
+
+
 def clean_found_value(field: str, value: str) -> str:
     if not value:
         return ""
