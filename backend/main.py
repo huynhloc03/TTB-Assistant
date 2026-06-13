@@ -7,12 +7,16 @@ import pytesseract
 from pytesseract import Output
 import json
 import io
+import os
 import time
 import shutil
 import uuid
 from typing import List
 
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+if os.name == "nt":
+    pytesseract.pytesseract.tesseract_cmd = (
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    )
 
 ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg"}
 
