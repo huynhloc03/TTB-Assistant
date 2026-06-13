@@ -229,7 +229,7 @@ The system was designed to return results within a few seconds for typical label
 
 For a detailed explanation of architectural decisions, OCR strategy, compliance validation logic, tradeoffs, and future improvements, see:
 
-- [APPROACH.md](APPROACH.md)
+- [APPROACH.md](approach.md)
 
 ## Assumptions
 
