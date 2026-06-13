@@ -64,11 +64,25 @@ def run_compliance_checks(
     text = extracted_text.upper()
     label_warning_text = find_warning_text(extracted_text)
 
-    warning_similarity = int(
-        fuzz.partial_ratio(
-            normalize_text(REQUIRED_HEALTH_WARNING),
-            normalize_text(label_warning_text),
-        )
+    def warning_similarity_score(expected: str, found: str) -> int:
+        expected_norm = normalize_text(expected)
+        found_norm = normalize_text(found)
+
+        if not expected_norm or not found_norm:
+            return 0
+
+        scores = [
+            fuzz.ratio(expected_norm, found_norm),
+            fuzz.partial_ratio(expected_norm, found_norm),
+            fuzz.token_sort_ratio(expected_norm, found_norm),
+            fuzz.token_set_ratio(expected_norm, found_norm),
+        ]
+
+        return int(max(scores))
+    
+    warning_similarity = warning_similarity_score(
+        REQUIRED_HEALTH_WARNING,
+        label_warning_text,
     )
 
     header_present = "GOVERNMENT WARNING:" in extracted_text
