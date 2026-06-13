@@ -469,32 +469,38 @@ def verify_label(application: dict, extracted_text: str) -> dict:
         )
 
     warning_expected = "GOVERNMENT WARNING:"
-    normalized_ocr = normalize_text(extracted_text)
 
-    warning_present = (
-        "warning" in normalized_ocr
-        and (
-            "government" in normalized_ocr
-            or "goveriment" in normalized_ocr
-            or "goverment" in normalized_ocr
-            or "governnent" in normalized_ocr
-        )
+    warning_found_text = ""
+
+    header_match = re.search(
+        r"(government\s+warning:?)",
+        extracted_text,
+        re.IGNORECASE,
     )
 
-    if warning_present:
-        warning_matched = True
-        warning_found_text = "GOVERNMENT WARNING:"
-        warning_similarity = 100
-    else:
-        warning_matched, warning_found_text, warning_similarity = find_best_match(
-            warning_expected,
-            extracted_text,
-            "Government Warning",
+    if header_match:
+        warning_found_text = header_match.group(1)
+
+        warning_matched = (
+            warning_found_text == "GOVERNMENT WARNING:"
         )
 
-    if not warning_matched:
-        warning_found_text = "Not Detected"
+        warning_similarity = (
+            100 if warning_matched else 0
+        )
+    else:
+        warning_matched = False
         warning_similarity = 0
+        warning_found_text = "Not Detected"
+
+    warning_details = (
+    "Government warning header was not detected on the label."
+    if warning_found_text == "Not Detected"
+    else (
+        "Mismatch with expected government warning header. "
+        "Expected 'GOVERNMENT WARNING:' in all caps."
+    )
+)
 
     results.append(
         build_result(
@@ -503,11 +509,7 @@ def verify_label(application: dict, extracted_text: str) -> dict:
             found_text=warning_found_text,
             matched=warning_matched,
             similarity=warning_similarity,
-            details=(
-                "Government warning detected."
-                if warning_matched
-                else "Required government warning statement was not detected on the label."
-            ),
+            details=warning_details,
         )
     )
 

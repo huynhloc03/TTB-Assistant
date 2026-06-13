@@ -274,12 +274,18 @@ The system was designed to return results within a few seconds for typical label
 ![OCR Extraction](screenshots/OCR.png)
 ![OCR Text](screenshots/OCR2.png)
 
-### BATCH Overview
+### Batch Overview
 
 ![Batch Review](screenshots/BATCH.png)
 ![Batch Review Continue](screenshots/BATCH2.png)
 
 ---
+
+## Demo Video
+g
+Watch the demo here:
+
+[![Demo Video](screenshots/DASHBOARD1.png)](https://youtu.be/MSSh_qRdyew)
 
 ## Author
 

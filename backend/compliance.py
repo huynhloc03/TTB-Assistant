@@ -66,6 +66,10 @@ def run_compliance_checks(
             normalize_text(label_warning_text),
         )
     )
+
+    header_present = "GOVERNMENT WARNING:" in extracted_text
+    warning_passed = header_present and warning_similarity >= 90
+
     brand_name = parsed_fields.get("brandName", "").strip()
 
     known_non_brand_terms = [
@@ -92,15 +96,19 @@ def run_compliance_checks(
         {
             "name": "Health Warning Statement",
             "category": "Part 16",
-            "passed": warning_similarity >= 85,
+            "passed": warning_passed,
             "expected": REQUIRED_HEALTH_WARNING,
             "found": label_warning_text,
             "similarity": warning_similarity,
             "details": (
-                "Required health warning appears present."
-                if warning_similarity >= 85
+            "Required health warning appears present."
+            if warning_passed
+            else (
+                "Government warning header must appear as 'GOVERNMENT WARNING:' in all caps."
+                if not header_present
                 else "Health warning appears missing, incomplete, or materially different."
-            ),
+            )
+        ),
         },
         {
             "name": "Brand Name Present",
