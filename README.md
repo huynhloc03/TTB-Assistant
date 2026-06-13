@@ -141,6 +141,15 @@ pip install -r requirements.txt
 python -m uvicorn main:app --reload
 ```
 
+### Additional Dependency
+
+This project requires Tesseract OCR to be installed separately.
+
+Download:
+https://github.com/tesseract-ocr/tesseract
+
+After installation, ensure the Tesseract executable is available in your system PATH.
+
 ### Frontend
 
 ```bash
@@ -267,8 +276,8 @@ The system was designed to return results within a few seconds for typical label
 
 ### BATCH Overview
 
-![Batch Review](screenshots/Batch.png)
-![Batch Review Continue](screenshots/Batch2.png)
+![Batch Review](screenshots/BATCH.png)
+![Batch Review Continue](screenshots/BATCH2.png)
 
 ---
 
