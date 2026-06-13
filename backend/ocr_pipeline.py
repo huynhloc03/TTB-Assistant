@@ -62,12 +62,11 @@ def run_single_ocr(image: Image.Image, rotation: int, psm: int = 6):
     start = time.time()
 
     rotated = image.rotate(rotation, expand=True) if rotation else image
-
-    rotated = rotated.convert("L")
-    rotated = ImageOps.autocontrast(rotated)
+    gray = rotated.convert("L")
+    gray = ImageOps.autocontrast(gray)
 
     text = pytesseract.image_to_string(
-        rotated,
+        gray,
         config=f"--oem 3 --psm {psm}",
     )
 
@@ -83,6 +82,7 @@ def run_single_ocr(image: Image.Image, rotation: int, psm: int = 6):
         "confidence": 95 if cleaned_text else 0,
         "rotation": rotation,
         "psm": psm,
+        "score": score_text(cleaned_text),
     }
 
 
