@@ -262,6 +262,7 @@ def score_ocr_text(text, dictionary_matches):
 
 
 def run_single_ocr_pass(cv_image, rotation=0):
+    print(f"OCR PASS: rotation={rotation}")
     rotated = rotate_image(cv_image, rotation)
 
     all_texts = []
@@ -270,16 +271,19 @@ def run_single_ocr_pass(cv_image, rotation=0):
     psm_modes = [6,11]
 
     for name, processed in preprocess_versions(rotated):
+        print(f"OCR PASS: preprocessing={name}")
         for psm in psm_modes:
+            print(f"OCR PASS: psm={psm}")
             text = ocr_image(processed, psm=psm)
+            print("OCR PASS: text extraction done")
             confidence = get_ocr_confidence(processed, psm=psm)
 
             if text:
                 all_texts.append(text)
                 confidence_scores.append(confidence)
-
+    print("OCR PASS: starting cluster OCR")
     cluster_results = ocr_text_clusters(rotated)
-
+    print("OCR PASS: cluster OCR complete")
     for item in cluster_results:
         all_texts.append(item["text"])
 
@@ -305,14 +309,17 @@ def run_single_ocr_pass(cv_image, rotation=0):
 
 
 def run_ocr_with_rotation(image):
+    print("OCR: converting image")
     cv_image = pil_to_cv2(image)
-
+    print("OCR: detecting orientation")
     detected_rotation = detect_orientation_with_osd(cv_image)
-
+    print("OCR: detected rotation =", detected_rotation)
+    print("OCR: starting initial OCR pass")
     result = run_single_ocr_pass(
         cv_image,
         rotation=detected_rotation,
     )
+    print("OCR: initial OCR pass complete")
 
     score = score_ocr_text(
         result["text"],

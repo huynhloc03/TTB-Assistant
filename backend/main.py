@@ -184,7 +184,7 @@ def verify(
 
         if image is None:
             return unsupported_file_response(file)
-
+        
         ocr_result = run_ocr_with_rotation(image)
 
         print("OCR SUCCESS")
