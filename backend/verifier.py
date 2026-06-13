@@ -301,6 +301,29 @@ def find_best_match(expected: str, extracted_text: str, field: str) -> tuple[boo
 
         return False, "", 0
 
+    if field == "Brand Name":
+        best_line = ""
+        best_score = 0
+
+        for line in lines:
+            cleaned_line = clean_found_value("Brand Name", line)
+
+            if not cleaned_line:
+                continue
+
+            score = fuzz.ratio(
+                expected_normalized,
+                normalize_text(cleaned_line),
+            )
+
+            if score > best_score:
+                best_score = int(score)
+                best_line = cleaned_line
+
+        matched = best_score >= get_threshold(field)
+
+        return matched, best_line, best_score
+
     if expected_normalized in full_text_normalized:
         return True, expected, 100
 
@@ -377,10 +400,26 @@ def get_parsed_field_confidence(parsed_fields: dict) -> dict:
         "netContents": 98 if parsed_fields.get("netContents") else 0,
     }
 
+def find_expected_phrase_in_ocr(expected: str, extracted_text: str) -> tuple[bool, str, int]:
+    expected_norm = normalize_text(expected)
+    text_norm = normalize_text(extracted_text)
+
+    if expected_norm in text_norm:
+        return True, expected, 100
+
+    similarity = int(fuzz.partial_ratio(expected_norm, text_norm))
+
+    if similarity >= 85:
+        return True, expected, similarity
+
+    return False, "", similarity
+
 
 def verify_label(application: dict, extracted_text: str) -> dict:
     parsed_fields = extract_label_fields(extracted_text)
-
+    print("DEBUG EXPECTED BRAND:", application.get("brandName"), flush=True)
+    print("DEBUG OCR HAS BRAND:", "timberridge" in normalize_text(extracted_text), flush=True)
+    print("DEBUG OCR TEXT:", extracted_text[:200], flush=True)
     results = []
 
     fields = [
@@ -411,7 +450,13 @@ def verify_label(application: dict, extracted_text: str) -> dict:
 
         parsed_value = parsed_fields.get(key, "").strip()
 
-        if parsed_value:
+        if label == "Brand Name":
+            matched, found_text, similarity = find_expected_phrase_in_ocr(
+                expected,
+                extracted_text,
+            )
+
+        elif parsed_value:
             found_text = parsed_value
 
             similarity = int(
@@ -429,13 +474,30 @@ def verify_label(application: dict, extracted_text: str) -> dict:
                 extracted_text,
                 label,
             )
+
         raw_found_text = found_text
+
         found_text = clean_found_value(label, found_text)
         expected_clean = clean_found_value(label, expected)
         found_clean = clean_found_value(label, found_text)
 
-        if label in ["Alcohol Content", "Net Contents"]:
-            if expected_clean and found_clean and expected_clean == found_clean:
+        if label == "Alcohol Content":
+            expected_num = re.sub(r"[^0-9.]", "", expected_clean)
+            found_num = re.sub(r"[^0-9.]", "", found_clean)
+
+            try:
+                if float(expected_num) == float(found_num):
+                    matched = True
+                    similarity = 100
+                    found_text = found_clean
+            except:
+                pass
+
+        elif label == "Net Contents":
+            expected_num = re.sub(r"[^0-9]", "", expected_clean)
+            found_num = re.sub(r"[^0-9]", "", found_clean)
+
+            if expected_num and expected_num == found_num:
                 matched = True
                 similarity = 100
                 found_text = found_clean
@@ -472,8 +534,6 @@ def verify_label(application: dict, extracted_text: str) -> dict:
 
     warning_expected = "GOVERNMENT WARNING:"
 
-    warning_found_text = ""
-
     header_match = re.search(
         r"(government\s+warning:?)",
         extracted_text,
@@ -484,25 +544,29 @@ def verify_label(application: dict, extracted_text: str) -> dict:
         warning_found_text = header_match.group(1)
 
         warning_matched = (
-            warning_found_text == "GOVERNMENT WARNING:"
+            warning_found_text == warning_expected
         )
 
-        warning_similarity = (
-            100 if warning_matched else 0
+        warning_similarity = int(
+            fuzz.ratio(
+                warning_found_text,
+                warning_expected,
+            )
         )
     else:
-        warning_matched = False
-        warning_similarity = 0
         warning_found_text = "Not Detected"
+        warning_similarity = 0
+        warning_matched = False
 
     warning_details = (
-    "Government warning header was not detected on the label."
-    if warning_found_text == "Not Detected"
-    else (
-        "Mismatch with expected government warning header. "
-        "Expected 'GOVERNMENT WARNING:' in all caps."
+        "Government warning header was detected."
+        if warning_matched
+        else (
+            "Government warning header was not detected on the label."
+            if warning_found_text == "Not Detected"
+            else "Mismatch with expected government warning header. Expected 'GOVERNMENT WARNING:' in all caps."
+        )
     )
-)
 
     results.append(
         build_result(
@@ -537,7 +601,6 @@ def verify_label(application: dict, extracted_text: str) -> dict:
         "complianceChecks": compliance_checks,
         "extractedText": extracted_text,
     }
-
 
 def verify_label_from_image(application: dict, image_path: str) -> dict:
     if run_ocr_pipeline is None:

@@ -71,14 +71,12 @@ def run_compliance_checks(
         if not expected_norm or not found_norm:
             return 0
 
-        scores = [
-            fuzz.ratio(expected_norm, found_norm),
-            fuzz.partial_ratio(expected_norm, found_norm),
-            fuzz.token_sort_ratio(expected_norm, found_norm),
-            fuzz.token_set_ratio(expected_norm, found_norm),
-        ]
+        base_score = fuzz.ratio(expected_norm, found_norm)
 
-        return int(max(scores))
+        extra_length = max(0, len(found_norm) - len(expected_norm))
+        penalty = min(25, extra_length // 5)
+
+        return max(0, int(base_score - penalty))
     
     warning_similarity = warning_similarity_score(
         REQUIRED_HEALTH_WARNING,

@@ -1,8 +1,9 @@
 import os
+import re
 import shutil
-import time
 
 import pytesseract
+from pytesseract import Output
 from PIL import Image, ImageOps
 
 
@@ -16,128 +17,80 @@ else:
         pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
 
-def looks_readable(text: str) -> bool:
-    if not text:
-        return False
+def get_ocr_confidence(image: Image.Image) -> int:
+    data = pytesseract.image_to_data(image, output_type=Output.DICT)
 
-    upper_text = text.upper()
+    confidences = []
 
-    strong_terms = [
-        "GOVERNMENT WARNING",
-        "ALC",
-        "VOL",
-        "PROOF",
-        "ML",
-        "DISTILLED",
-        "BOTTLED",
-        "WHISKEY",
-        "VODKA",
-        "GIN",
-        "RUM",
-        "TEQUILA",
-        "BRANDY",
-        "BOURBON",
-    ]
+    for conf in data.get("conf", []):
+        try:
+            value = float(conf)
 
-    if any(term in upper_text for term in strong_terms):
-        return True
+            if value >= 0:
+                confidences.append(value)
 
-    words = upper_text.split()
-    readable_words = [
-        word for word in words
-        if len(word) >= 3 and word.isalpha()
-    ]
+        except ValueError:
+            continue
 
-    return len(readable_words) >= 8
-
-
-def clean_text(text: str) -> str:
-    if not text:
-        return ""
-
-    return " ".join(text.upper().replace("\n", " ").split())
-
-
-def run_single_ocr(image: Image.Image, rotation: int, psm: int = 6):
-    start = time.time()
-
-    rotated = image.rotate(rotation, expand=True) if rotation else image
-    gray = rotated.convert("L")
-    gray = ImageOps.autocontrast(gray)
-
-    text = pytesseract.image_to_string(
-        gray,
-        config=f"--oem 3 --psm {psm}",
-    )
-
-    cleaned_text = clean_text(text)
-
-    print(
-        f"OCR rotation [{rotation}] psm [{psm}] took {time.time() - start:.2f}s",
-        flush=True,
-    )
-
-    return {
-        "text": cleaned_text,
-        "confidence": 95 if cleaned_text else 0,
-        "rotation": rotation,
-        "psm": psm,
-        "score": score_text(cleaned_text),
-    }
-
-
-def score_text(text: str) -> int:
-    if not text:
+    if not confidences:
         return 0
 
-    upper_text = text.upper()
+    return round(sum(confidences) / len(confidences))
 
-    strong_terms = [
-        "GOVERNMENT WARNING",
-        "ALC",
-        "VOL",
-        "PROOF",
-        "ML",
-        "DISTILLED",
-        "BOTTLED",
-        "WHISKEY",
-        "VODKA",
-        "GIN",
-        "RUM",
-        "TEQUILA",
-        "BRANDY",
-        "BOURBON",
-    ]
 
-    score = len(upper_text)
+def detect_orientation_rotation(image: Image.Image) -> int:
+    try:
+        osd = pytesseract.image_to_osd(image)
 
-    for term in strong_terms:
-        if term in upper_text:
-            score += 100
+        match = re.search(r"Rotate:\s+(\d+)", osd)
 
-    return score
+        if match:
+            return int(match.group(1))
+
+    except Exception:
+        return 0
+
+    return 0
 
 
 def run_ocr_with_rotation(image: Image.Image):
-    print("FAST ROTATION OCR PIPELINE EXECUTED", flush=True)
+    best_result = {
+        "text": "",
+        "confidence": 0,
+        "rotation": 0,
+        "psm": 3,
+    }
 
-    result = run_single_ocr(image, rotation=0, psm=6)
+    rotations = [0, 180]
+    psm_modes = [3]
 
-    if looks_readable(result["text"]):
-        return result
+    for rotation in rotations:
+        rotated = image.rotate(rotation, expand=True) if rotation else image
 
-    best_result = result
-    best_score = score_text(result["text"])
+        rotated = rotated.convert("L")
+        rotated = ImageOps.autocontrast(rotated)
 
-    for rotation in [90, 180, 270]:
-        candidate = run_single_ocr(image, rotation=rotation, psm=6)
-        candidate_score = score_text(candidate["text"])
+        for psm in psm_modes:
+            text = pytesseract.image_to_string(
+                rotated,
+                config=f"--psm {psm}",
+            )
 
-        if candidate_score > best_score:
-            best_result = candidate
-            best_score = candidate_score
+            confidence = get_ocr_confidence(rotated)
 
-        if looks_readable(candidate["text"]):
-            return candidate
+            score = confidence + min(len(text.strip()) / 10, 20)
+
+            best_score = best_result["confidence"] + min(
+                len(best_result["text"].strip()) / 10,
+                20,
+            )
+
+            if score > best_score:
+                best_result = {
+                    "text": text,
+                    "confidence": confidence,
+                    "rotation": rotation,
+                    "psm": psm,
+                }
 
     return best_result

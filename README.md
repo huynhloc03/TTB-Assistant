@@ -125,9 +125,21 @@ Review Dashboard
 
 ---
 
-## Installation
+# Installation
 
-### Backend
+## Clone Repository
+
+```bash
+git clone https://github.com/huynhloc03/ttb-label-assistant.git
+
+cd ttb-label-assistant
+```
+
+---
+
+## Backend Setup
+
+### Windows
 
 ```bash
 cd backend
@@ -141,16 +153,83 @@ pip install -r requirements.txt
 python -m uvicorn main:app --reload
 ```
 
-### Additional Dependency
+### Linux / macOS
 
-This project requires Tesseract OCR to be installed separately.
+```bash
+cd backend
 
-Download:
+python3 -m venv venv
+
+source venv/bin/activate
+
+pip install -r requirements.txt
+
+python3 -m uvicorn main:app --reload
+```
+
+Backend API will be available at:
+
+```text
+http://localhost:8000
+```
+
+Swagger documentation:
+
+```text
+http://localhost:8000/docs
+```
+
+---
+
+## Tesseract OCR Installation
+
+Tesseract OCR must be installed separately.
+
+### Windows
+
+Download and install:
+
 https://github.com/tesseract-ocr/tesseract
 
-After installation, ensure the Tesseract executable is available in your system PATH.
+After installation, ensure Tesseract is added to your system PATH.
 
-### Frontend
+Verify installation:
+
+```bash
+tesseract --version
+```
+
+### Ubuntu / Debian
+
+```bash
+sudo apt update
+
+sudo apt install tesseract-ocr
+```
+
+Verify installation:
+
+```bash
+tesseract --version
+```
+
+### macOS (Homebrew)
+
+```bash
+brew install tesseract
+```
+
+Verify installation:
+
+```bash
+tesseract --version
+```
+
+---
+
+## Frontend Setup
+
+### Windows, Linux, and macOS
 
 ```bash
 cd frontend
@@ -159,6 +238,63 @@ npm install
 
 npm run dev
 ```
+
+Frontend will be available at:
+
+```text
+http://localhost:3000
+```
+
+---
+
+## Environment Variables
+
+Create a `.env.local` file inside the frontend directory:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+For production deployments:
+
+```env
+NEXT_PUBLIC_API_URL=https://api.ttbxyz.us
+```
+
+---
+
+## Production Deployment (Linux)
+
+The production backend is designed to run behind Nginx using FastAPI and systemd.
+
+### Restart Service
+
+```bash
+sudo systemctl restart ttb-assistant
+```
+
+### Check Service Status
+
+```bash
+sudo systemctl status ttb-assistant
+```
+
+### View Logs
+
+```bash
+journalctl -u ttb-assistant -f
+```
+
+### Nginx
+
+Reload configuration:
+
+```bash
+sudo nginx -t
+
+sudo systemctl reload nginx
+```
+
 
 ---
 
