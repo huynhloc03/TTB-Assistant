@@ -1,25 +1,15 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from PIL import Image, UnidentifiedImageError, ImageOps
+from PIL import Image, UnidentifiedImageError
 from ocr_pipeline import run_ocr_with_rotation
 from verifier import verify_label
-import pytesseract
-from pytesseract import Output
+
 import json
 import io
-import os
 import time
-import shutil
-import uuid
-from typing import List
 
-if os.name == "nt":
-    pytesseract.pytesseract.tesseract_cmd = (
-        r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-    )
 
 ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg"}
-
 
 app = FastAPI(title="TTB AI API")
 
@@ -83,84 +73,12 @@ def unsupported_file_response(file: UploadFile):
 
 def open_uploaded_image(image_bytes: bytes):
     try:
-        return Image.open(io.BytesIO(image_bytes))
+        image = Image.open(io.BytesIO(image_bytes))
+        image.load()
+        return image
     except UnidentifiedImageError:
         return None
 
-def get_ocr_confidence(image: Image.Image) -> int:
-    data = pytesseract.image_to_data(image, output_type=Output.DICT)
-
-    confidences = []
-    for conf in data.get("conf", []):
-        try:
-            value = float(conf)
-            if value >= 0:
-                confidences.append(value)
-        except ValueError:
-            continue
-
-    if not confidences:
-        return 0
-
-    return round(sum(confidences) / len(confidences))
-
-
-def detect_orientation_rotation(image: Image.Image) -> int:
-    try:
-        osd = pytesseract.image_to_osd(image)
-
-        match = re.search(r"Rotate:\s+(\d+)", osd)
-
-        if match:
-            return int(match.group(1))
-
-    except Exception:
-        return 0
-
-    return 0
-
-
-def run_ocr_with_rotation(image: Image.Image):
-    best_result = {
-        "text": "",
-        "confidence": 0,
-        "rotation": 0,
-        "psm": 3,
-    }
-
-    rotations = [0, 90, 180, 270]
-    psm_modes = [3]
-
-    for rotation in rotations:
-        rotated = image.rotate(rotation, expand=True) if rotation else image
-
-        rotated = rotated.convert("L")
-        rotated = ImageOps.autocontrast(rotated)
-
-        for psm in psm_modes:
-            text = pytesseract.image_to_string(
-                rotated,
-                config=f"--psm {psm}",
-            )
-
-            confidence = get_ocr_confidence(rotated)
-
-            score = confidence + min(len(text.strip()) / 10, 20)
-
-            best_score = best_result["confidence"] + min(
-                len(best_result["text"].strip()) / 10,
-                20,
-            )
-
-            if score > best_score:
-                best_result = {
-                    "text": text,
-                    "confidence": confidence,
-                    "rotation": rotation,
-                    "psm": psm,
-                }
-
-    return best_result
 
 @app.post("/verify")
 def verify(
@@ -170,11 +88,11 @@ def verify(
     start_time = time.time()
 
     try:
-        print("========== VERIFY START ==========")
-        print("Filename:", file.filename)
+        print("========== VERIFY START ==========", flush=True)
+        print("Filename:", file.filename, flush=True)
 
         application = json.loads(applicationData)
-        print("Application:", application)
+        print("Application:", application, flush=True)
 
         if not is_allowed_image(file):
             return unsupported_file_response(file)
@@ -184,34 +102,41 @@ def verify(
 
         if image is None:
             return unsupported_file_response(file)
+
         image.thumbnail((900, 900))
 
         ocr_result = run_ocr_with_rotation(image)
 
-        print("OCR SUCCESS")
-        print("OCR Confidence:", ocr_result["confidence"])
-        print("Rotation:", ocr_result["rotation"])
-        print("PSM:", ocr_result["psm"])
+        print("OCR SUCCESS", flush=True)
+        print("OCR Confidence:", ocr_result.get("confidence"), flush=True)
+        print("Rotation:", ocr_result.get("rotation"), flush=True)
+        print("PSM:", ocr_result.get("psm"), flush=True)
 
-        extracted_text = ocr_result["text"]
+        extracted_text = ocr_result.get("text", "")
 
-        print("OCR Preview:")
-        print(extracted_text[:500])
+        print("OCR Preview:", flush=True)
+        print(extracted_text[:500], flush=True)
 
         verification = verify_label(application, extracted_text)
 
-        print("VERIFY SUCCESS")
-
         verification["processingTimeSeconds"] = round(time.time() - start_time, 2)
         verification["filename"] = file.filename
-        verification["ocrConfidence"] = ocr_result["confidence"]
-        verification["rotationApplied"] = ocr_result["rotation"]
-        verification["psmUsed"] = ocr_result["psm"]
+        verification["ocrConfidence"] = ocr_result.get("confidence", 0)
+        verification["rotationApplied"] = ocr_result.get("rotation", 0)
+        verification["psmUsed"] = ocr_result.get("psm", 6)
+
+        print("VERIFY SUCCESS", flush=True)
+        print("Processing Time:", verification["processingTimeSeconds"], flush=True)
+        print("=========== VERIFY END ===========", flush=True)
 
         return verification
 
     except json.JSONDecodeError:
         return {
+            "overallStatus": "ERROR",
+            "results": [],
+            "complianceChecks": [],
+            "extractedText": "",
             "error": "Invalid applicationData JSON",
             "received": applicationData,
         }
@@ -219,22 +144,9 @@ def verify(
     except Exception as e:
         import traceback
 
-        print("========== VERIFY ERROR ==========")
-        print("Error:", str(e))
+        print("========== VERIFY ERROR ==========", flush=True)
+        print("Error:", str(e), flush=True)
         traceback.print_exc()
-        print("==================================")
+        print("==================================", flush=True)
 
         raise
-
-
-@app.post("/analyze-label")
-async def analyze_label(file: UploadFile = File(...)):
-    file_id = str(uuid.uuid4())
-    image_path = f"uploads/{file_id}_{file.filename}"
-
-    with open(image_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    result = run_ocr_pipeline(image_path)
-
-    return result
