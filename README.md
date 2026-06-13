@@ -225,6 +225,12 @@ The system was designed to return results within a few seconds for typical label
 
 ---
 
+## Additional Documentation
+
+For a detailed explanation of architectural decisions, OCR strategy, compliance validation logic, tradeoffs, and future improvements, see:
+
+- [APPROACH.md](APPROACH.md)
+
 ## Assumptions
 
 * Labels are primarily English-language labels.
@@ -282,7 +288,6 @@ The system was designed to return results within a few seconds for typical label
 ---
 
 ## Demo Video
-g
 Watch the demo here:
 
 [![Demo Video](screenshots/DASHBOARD1.png)](https://youtu.be/MSSh_qRdyew)
