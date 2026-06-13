@@ -2,10 +2,8 @@ import os
 import shutil
 import time
 
-import cv2
-import numpy as np
 import pytesseract
-from PIL import Image
+from PIL import Image, ImageOps
 
 
 if os.name == "nt":
@@ -18,6 +16,41 @@ else:
         pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
 
+def looks_readable(text: str) -> bool:
+    if not text:
+        return False
+
+    upper_text = text.upper()
+
+    strong_terms = [
+        "GOVERNMENT WARNING",
+        "ALC",
+        "VOL",
+        "PROOF",
+        "ML",
+        "DISTILLED",
+        "BOTTLED",
+        "WHISKEY",
+        "VODKA",
+        "GIN",
+        "RUM",
+        "TEQUILA",
+        "BRANDY",
+        "BOURBON",
+    ]
+
+    if any(term in upper_text for term in strong_terms):
+        return True
+
+    words = upper_text.split()
+    readable_words = [
+        word for word in words
+        if len(word) >= 3 and word.isalpha()
+    ]
+
+    return len(readable_words) >= 8
+
+
 def clean_text(text: str) -> str:
     if not text:
         return ""
@@ -25,66 +58,86 @@ def clean_text(text: str) -> str:
     return " ".join(text.upper().replace("\n", " ").split())
 
 
-def pil_to_cv2(image: Image.Image):
-    image_np = np.array(image.convert("RGB"))
-    return cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
+def run_single_ocr(image: Image.Image, rotation: int, psm: int = 6):
+    start = time.time()
 
+    rotated = image.rotate(rotation, expand=True) if rotation else image
 
-def preprocess_image(image):
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    rotated = rotated.convert("L")
+    rotated = ImageOps.autocontrast(rotated)
 
-    gray = cv2.resize(
-        gray,
-        None,
-        fx=1.5,
-        fy=1.5,
-        interpolation=cv2.INTER_CUBIC,
+    text = pytesseract.image_to_string(
+        rotated,
+        config=f"--oem 3 --psm {psm}",
     )
 
-    thresh = cv2.threshold(
-        gray,
-        0,
-        255,
-        cv2.THRESH_BINARY + cv2.THRESH_OTSU,
-    )[1]
+    cleaned_text = clean_text(text)
 
-    return [
-        ("threshold", thresh),
+    print(
+        f"OCR rotation [{rotation}] psm [{psm}] took {time.time() - start:.2f}s",
+        flush=True,
+    )
+
+    return {
+        "text": cleaned_text,
+        "confidence": 95 if cleaned_text else 0,
+        "rotation": rotation,
+        "psm": psm,
+    }
+
+
+def score_text(text: str) -> int:
+    if not text:
+        return 0
+
+    upper_text = text.upper()
+
+    strong_terms = [
+        "GOVERNMENT WARNING",
+        "ALC",
+        "VOL",
+        "PROOF",
+        "ML",
+        "DISTILLED",
+        "BOTTLED",
+        "WHISKEY",
+        "VODKA",
+        "GIN",
+        "RUM",
+        "TEQUILA",
+        "BRANDY",
+        "BOURBON",
     ]
 
+    score = len(upper_text)
 
-def ocr_image(image, psm: int = 6) -> str:
-    config = f"--oem 3 --psm {psm}"
-    text = pytesseract.image_to_string(image, config=config)
-    return clean_text(text)
+    for term in strong_terms:
+        if term in upper_text:
+            score += 100
+
+    return score
 
 
 def run_ocr_with_rotation(image: Image.Image):
-    print("OCR PIPELINE FILE EXECUTED", flush=True)
+    print("FAST ROTATION OCR PIPELINE EXECUTED", flush=True)
 
-    cv_image = pil_to_cv2(image)
+    result = run_single_ocr(image, rotation=0, psm=6)
 
-    all_text = []
-    psm = 6
+    if looks_readable(result["text"]):
+        return result
 
-    for name, processed in preprocess_image(cv_image):
-        start = time.time()
+    best_result = result
+    best_score = score_text(result["text"])
 
-        text = ocr_image(processed, psm=psm)
+    for rotation in [90, 180, 270]:
+        candidate = run_single_ocr(image, rotation=rotation, psm=6)
+        candidate_score = score_text(candidate["text"])
 
-        print(
-            f"OCR pass [{name}] took {time.time() - start:.2f}s",
-            flush=True,
-        )
+        if candidate_score > best_score:
+            best_result = candidate
+            best_score = candidate_score
 
-        if text:
-            all_text.append(text)
+        if looks_readable(candidate["text"]):
+            return candidate
 
-    merged_text = clean_text(" ".join(all_text))
-
-    return {
-        "text": merged_text,
-        "confidence": 95 if merged_text else 0,
-        "rotation": 0,
-        "psm": psm,
-    }
+    return best_result
